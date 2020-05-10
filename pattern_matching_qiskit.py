@@ -97,19 +97,17 @@ bft = ''.join('1' if w[i] == '3' else '0' for i in range(len(w)))
 
 init(qc, s, M)
 
-for _i in range(0, int(sqrt(N - M + 1))):
-# for _i in range(0, M):
-    i = random.randint(0, M - 1)
-    # i = _i
-    if p[i] == '0':
-        oracle_function(bfa, s, i)
-    elif p[i] == '1':
-        oracle_function(bfc, s, i)
-    elif p[i] == '2':
-        oracle_function(bfg, s, i)
-    else:
-        oracle_function(bft, s, i)
-    amplitude_amplification(s, M)
+for _i in range(0, int(sqrt(N + M - 1))):
+    for i in range(0, M):
+        if p[i] == '0':
+            oracle_function(bfa, s, i)
+        elif p[i] == '1':
+            oracle_function(bfc, s, i)
+        elif p[i] == '2':
+            oracle_function(bfg, s, i)
+        else:
+            oracle_function(bft, s, i)
+        amplitude_amplification(s, M)
 
 
 # x = 0
