@@ -2,16 +2,19 @@ from qiskit import ClassicalRegister
 from qiskit import QuantumRegister
 from qiskit import QuantumCircuit
 from math import *
+import random
 
 N = 8                           # Reference Genome size
-w = "22013220"                  # Reference Genome
-p = "32"                        # Short Read
-M = len(p)                      # Short Read size
+w = "22013213"                  # Reference Genome
+p = "22"                        # Short Read
+M = len(p)                     # Short Read size
 s = ceil(log2(N-M))
-total_qubits = 2*s*M-2
+total_qubits = s * M + 1
+anc_id = s * M
+
 
 qr = QuantumRegister(total_qubits, 'q')
-cr = ClassicalRegister(s + 1, 'c')
+cr = ClassicalRegister(s, 'c')
 qc = QuantumCircuit(qr, cr)
 
 def init(qc, s, M):
@@ -22,33 +25,35 @@ def init(qc, s, M):
         for j in range(0, s):
             qc.cx(qr[i * s + j], qr[i * s + s + j])
         for j in range(0, s):
-            qc.x(qr[i * s + s - 1 - j])
+            ic = (i + 1) * s - (j + 1)
+            qc.x(qr[ic])
             nc = []
-            for k in range(i * s + s - 1, i * s + s - 1 - j - 1, -1):
-                nc.insert(0,k)
-            for k in range(i * s + s + s - 1, i * s + s + s - 1 - j - 1, - 1):
-                nCX(nc, k, s * M)        
-            qc.x(qr[i * s + s - 1 - j])
+            for k in range(ic, (i + 1) * s):
+                nc.append(k)
+            for k in range((i + 2) * s - 1,s + ic - 1, -1):
+                nCX(nc, k, anc_id)        
+            qc.x(qr[ic])
+    return
 
-
-def oracle_function(f, s, q, anc):
+def oracle_function(f, s, q):
     for i in range(0, len(f)):
-        if f[i]:
+        if f[i] == '1':
+            fis = format(i, '0'+str(s)+'b')
             for j in range(0, s):
-                if not f[j]:
-                    qc.x(qr[q + j])
-            qc.h(qr[q + s - 1])
+                if fis[j] == '0':
+                    qc.x(qr[q*s + j])
+            qc.h(qr[(q+1) * s - 1])
             nc = []
 
-            for j in range(q, q + s - 1):
+            for j in range(q * s,(q+1) * s - 1):
                 nc.append(j)
 
-            nCX(nc, q + s - 1, anc)
-            qc.h(qr[q + s - 1])
+            nCX(nc, (q + 1)  * s - 1, anc_id)
+            qc.h(qr[(q + 1)  * s - 1])
 
             for j in range(0, s):
-                if not f[j]:
-                    qc.x(qr[q + j])
+                if fis[j] == '0':
+                    qc.x(qr[q * s + j])
     
 
 def amplitude_amplification(s, M):
@@ -67,77 +72,56 @@ def amplitude_amplification(s, M):
         qc.x(qr[i])
         qc.h(qr[i])
 
-def nCX(c, t, anc):
+def nCX(c, t, b):
     nc = len(c)
     if nc == 1:
         qc.cx(qr[c[0]], qr[t])
     elif nc == 2:
         qc.toffoli(qr[c[0]],qr[c[1]],qr[t])
     else:
-        qc.toffoli(qr[c[0]],qr[c[1]],qr[anc])
-        for i in range(2, nc):
-            qc.toffoli(qr[c[i]],qr[anc + i - 2],qr[anc + i - 1])
-
-        qc.cx(qr[anc + nc - 2], qr[t])
-
-        for i in range(nc - 1, 1, -1):
-            qc.toffoli(qr[c[i]], anc + i - 2, anc + i - 1)
-        qc.toffoli(qr[c[0]], qr[c[1]], anc) 
-
+        nch = ceil(nc/2)
+        c1 = c[:nch]
+        c2 = c[nch:]
+        nCX(c1, b, nch + 1)
+        nCX(c2, t, nch - 1)
+        nCX(c1, b, nch + 1)
+        nCX(c2, t, nch - 1)
+    return
 
 
+
+bfa = ''.join('1' if w[i] == '0' else '0' for i in range(len(w)))
+bfc = ''.join('1' if w[i] == '1' else '0' for i in range(len(w)))
+bfg = ''.join('1' if w[i] == '2' else '0' for i in range(len(w)))
+bft = ''.join('1' if w[i] == '3' else '0' for i in range(len(w)))
 
 init(qc, s, M)
 
-fa = []
-fc = []
-fg = []
-ft = []
-
-for wi in range(0,N):
-    if w[wi] == '0':
-        fa.append(True)
-        fc.append(False)
-        fg.append(False)
-        ft.append(False)
-    elif w[wi] == '1':
-        fa.append(False)
-        fc.append(True)
-        fg.append(False)
-        ft.append(False)
-    elif w[wi] == '2':
-        fa.append(False)
-        fc.append(False)
-        fg.append(True)
-        ft.append(False)
-    else:
-        fa.append(False)
-        fc.append(False)
-        fg.append(False)
-        ft.append(True)
-
-for i in range(0,M):
+for _i in range(0, int(sqrt(N - M + 1))):
+# for _i in range(0, M):
+    i = random.randint(0, M - 1)
+    # i = _i
     if p[i] == '0':
-        oracle_function(fa, s, i * s, s * M)
+        oracle_function(bfa, s, i)
     elif p[i] == '1':
-        oracle_function(fc, s, i * s, s * M)
+        oracle_function(bfc, s, i)
     elif p[i] == '2':
-        oracle_function(fg, s, i * s, s * M)
+        oracle_function(bfg, s, i)
     else:
-        oracle_function(ft, s, i * s, s * M)
-    
+        oracle_function(bft, s, i)
     amplitude_amplification(s, M)
 
-x = 0
-for i in range(total_qubits - s - 1, total_qubits):
-    qc.measure(qr[i], cr[x])
-    x = x + 1
+
+# x = 0
+for i in range(0, s):
+    qc.measure(qr[i], cr[i])
+    # x = x + 1
 
 #Illustrating the quantum circuit
 from qiskit.visualization import plot_histogram
 # qc.draw(output='mpl', filename='pm_8_bit.pdf')
 qc.draw(output='mpl', filename='pm_8_bit.png')
-print(qc.qasm())
+# print(qc.qasm())
 
 #for running circuit on simulator or QPU
 from qiskit import execute
