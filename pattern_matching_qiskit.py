@@ -2,16 +2,17 @@ from qiskit import ClassicalRegister
 from qiskit import QuantumRegister
 from qiskit import QuantumCircuit
 from math import *
+import random
 
 N = 8                           # Reference Genome size
-w = "22013220"                  # Reference Genome
-p = "32"                        # Short Read
+w = "22013231"                  # Reference Genome
+p = "22"                        # Short Read
 M = len(p)                      # Short Read size
 s = ceil(log2(N-M))
 total_qubits = 2*s*M-2
 
 qr = QuantumRegister(total_qubits, 'q')
-cr = ClassicalRegister(s + 1, 'c')
+cr = ClassicalRegister(s, 'c')
 qc = QuantumCircuit(qr, cr)
 
 def init(qc, s, M):
@@ -84,9 +85,6 @@ def nCX(c, t, anc):
             qc.toffoli(qr[c[i]], anc + i - 2, anc + i - 1)
         qc.toffoli(qr[c[0]], qr[c[1]], anc) 
 
-
-
-
 init(qc, s, M)
 
 fa = []
@@ -117,6 +115,7 @@ for wi in range(0,N):
         ft.append(True)
 
 for i in range(0,M):
+    # i = random.randint(0, M - 1)
     if p[i] == '0':
         oracle_function(fa, s, i * s, s * M)
     elif p[i] == '1':
@@ -125,19 +124,16 @@ for i in range(0,M):
         oracle_function(fg, s, i * s, s * M)
     else:
         oracle_function(ft, s, i * s, s * M)
-    
     amplitude_amplification(s, M)
 
-x = 0
-for i in range(total_qubits - s - 1, total_qubits):
-    qc.measure(qr[i], cr[x])
-    x = x + 1
+for i in range(0, s):
+    qc.measure(qr[i], cr[i])
 
 #Illustrating the quantum circuit
 from qiskit.visualization import plot_histogram
 # qc.draw(output='mpl', filename='pm_8_bit.pdf')
 qc.draw(output='mpl', filename='pm_8_bit.png')
-print(qc.qasm())
+# print(qc.qasm())
 
 #for running circuit on simulator or QPU
 from qiskit import execute
