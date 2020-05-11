@@ -10,8 +10,7 @@ p = "22"                        # Short Read
 M = len(p)                     # Short Read size
 s = ceil(log2(N-M))
 total_qubits = s * M + 1
-anc_id = s * M
-
+ancilla_bit_index = s * M
 
 qr = QuantumRegister(total_qubits, 'q')
 cr = ClassicalRegister(s, 'c')
@@ -30,62 +29,69 @@ def init(qc, s, M):
             nc = []
             for k in range(ic, (i + 1) * s):
                 nc.append(k)
-            for k in range((i + 2) * s - 1,s + ic - 1, -1):
-                nCX(nc, k, anc_id)        
+            for k in range((i + 2) * s - 1, s + ic - 1, -1):
+                multi_controlled_c_not(nc, k, ancilla_bit_index)
             qc.x(qr[ic])
     return
 
 def oracle_function(f, s, q):
     for i in range(0, len(f)):
         if f[i] == '1':
+            # hack to get binary representation of 'i' as a string
             fis = format(i, '0'+str(s)+'b')
             for j in range(0, s):
                 if fis[j] == '0':
                     qc.x(qr[q*s + j])
             qc.h(qr[(q+1) * s - 1])
-            nc = []
 
+            control_bits = []
             for j in range(q * s,(q+1) * s - 1):
-                nc.append(j)
+                control_bits.append(j)
 
-            nCX(nc, (q + 1)  * s - 1, anc_id)
+            multi_controlled_c_not(control_bits, (q + 1)  * s - 1, ancilla_bit_index)
             qc.h(qr[(q + 1)  * s - 1])
 
             for j in range(0, s):
                 if fis[j] == '0':
                     qc.x(qr[q * s + j])
     
-
+# Grover's amplitude amplification function
 def amplitude_amplification(s, M):
     for i in range(0, s * M):
         qc.h(qr[i])
         qc.x(qr[i])
 
     qc.h(qr[s * M - 1])
-    nc = []
+    control_bits = []
     for j in range(0, s * M - 1):
-        nc.append(j)
-    nCX(nc, s * M - 1, s * M)
+        control_bits.append(j)
+    multi_controlled_c_not(control_bits, s * M - 1, s * M)
     qc.h(qr[s * M - 1])
 
     for i in range(0, s * M):
         qc.x(qr[i])
         qc.h(qr[i])
 
-def nCX(c, t, b):
-    nc = len(c)
-    if nc == 1:
-        qc.cx(qr[c[0]], qr[t])
-    elif nc == 2:
-        qc.toffoli(qr[c[0]],qr[c[1]],qr[t])
+# Multicontrolled CNOT gate
+# For on control bit it is a CNOT gate
+# For two control bits, this is essentially a Toffoli gate
+# For multiple control bits, we split the control bits into two halves
+# then the left half is connected to an ancilla bit and the right half
+# is connected the to the target bit
+def multi_controlled_c_not(control_bits, target_bit, ancilla_bit):
+    len_c = len(control_bits)
+    if len_c == 1:
+        qc.cx(qr[control_bits[0]], qr[target_bit])
+    elif len_c == 2:
+        qc.toffoli(qr[control_bits[0]],qr[control_bits[1]],qr[target_bit])
     else:
-        nch = ceil(nc/2)
-        c1 = c[:nch]
-        c2 = c[nch:]
-        nCX(c1, b, nch + 1)
-        nCX(c2, t, nch - 1)
-        nCX(c1, b, nch + 1)
-        nCX(c2, t, nch - 1)
+        len_c_half = ceil(len_c/2)
+        c_right = control_bits[:len_c_half]
+        c_left = control_bits[len_c_half:]
+        multi_controlled_c_not(c_right, ancilla_bit, len_c_half + 1)
+        multi_controlled_c_not(c_left, target_bit, len_c_half - 1)
+        multi_controlled_c_not(c_right, ancilla_bit, len_c_half + 1)
+        multi_controlled_c_not(c_left, target_bit, len_c_half - 1)
     return
 
 
@@ -110,10 +116,8 @@ for _i in range(0, int(sqrt(N + M - 1))):
         amplitude_amplification(s, M)
 
 
-# x = 0
 for i in range(0, s):
     qc.measure(qr[i], cr[i])
-    # x = x + 1
 
 #Illustrating the quantum circuit
 from qiskit.visualization import plot_histogram
