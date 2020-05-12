@@ -17,21 +17,27 @@ cr = ClassicalRegister(s, 'c')
 qc = QuantumCircuit(qr, cr)
 
 def init(qc, s, M):
+    # Initialize the qubits to uniform superposition
     for i in range(0, s):
         qc.h(qr[i])
     
     for i in range(0, M-1):
+        # Add CNOT gates to copy positional encoding to the next set
         for j in range(0, s):
             qc.cx(qr[i * s + j], qr[i * s + s + j])
+        # Increment the positional encoding
         for j in range(0, s):
-            ic = (i + 1) * s - (j + 1)
-            qc.x(qr[ic])
+            inverted_control_bit = (i + 1) * s - (j + 1)
+            # Flip the control bit
+            qc.x(qr[inverted_control_bit])
             nc = []
-            for k in range(ic, (i + 1) * s):
+            for k in range(inverted_control_bit, (i + 1) * s):
                 nc.append(k)
-            for k in range((i + 2) * s - 1, s + ic - 1, -1):
+            # Apply multi-controlled CNOT
+            for k in range((i + 2) * s - 1, s + inverted_control_bit - 1, -1):
                 multi_controlled_c_not(nc, k, ancilla_bit_index)
-            qc.x(qr[ic])
+            # Flip the control bit
+            qc.x(qr[inverted_control_bit])
     return
 
 def oracle_function(f, s, q):
