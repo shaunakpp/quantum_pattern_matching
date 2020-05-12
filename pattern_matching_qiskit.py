@@ -7,12 +7,12 @@ import random
 import operator
 
 shots = 1000
-N = 6                           # Reference Genome size
+N = 8                           # Reference Genome size
 # w = "21013213"                  # Reference Genome
-w = "gcatta"
+w = "cgattgac"
 M = 2                           # Short Read size
 # p = "13"                        # Short Read
-p = "gc"
+p = "ga"
 print("Given String: ", w)
 print("Search: ", p)
 s = ceil(log2(N-M))
@@ -57,17 +57,9 @@ def oracle_function(f, s, q):
                 if binary_i[j] == '0':
                     qc.x(qr[q * s + j])
 
-
-            # Apply H gate for Phase to CX gate conversion
-            qc.h(qr[target_bit])
-            # Select the control bits
-
             control_bits = list(range(q * s, target_bit))
             # Apply multi controlled CX
             qc.mcx(control_bits, target_bit)
-
-            # Uncomputation of Phase to CX
-            qc.h(qr[(q + 1)  * s - 1])
 
             # Uncomputation of Phase gate
             for j in range(0, s):
@@ -83,14 +75,8 @@ def amplitude_amplification(s, M):
         qc.h(qr[i])
         qc.x(qr[i])
 
-    # Apply H gate for Phase to CX gate conversion
-    qc.h(qr[target_bit])
-
     control_bits = list(range(0, target_bit))
     qc.mcx(control_bits, target_bit)
-
-    # Uncomputation of Phase to CX
-    qc.h(qr[target_bit])
 
     for i in range(0, ancilla_bit):
         qc.x(qr[i])
