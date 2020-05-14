@@ -1,153 +1,126 @@
 from qiskit import ClassicalRegister
 from qiskit import QuantumRegister
 from qiskit import QuantumCircuit
-from math import *
 
+from math import *
+import random
+import operator
+
+shots = 1000
 N = 8                           # Reference Genome size
-w = "22013220"                  # Reference Genome
-p = "32"                        # Short Read
-M = len(p)                      # Short Read size
+# w = "21013213"                  # Reference Genome
+w = "cgattgac"
+M = 2                           # Short Read size
+# p = "13"                        # Short Read
+p = "ga"
+print("Given String: ", w)
+print("Search: ", p)
 s = ceil(log2(N-M))
-total_qubits = 2*s*M-2
+total_qubits = s * M + 1
+ancilla_bit= s * M
 
 qr = QuantumRegister(total_qubits, 'q')
-cr = ClassicalRegister(s + 1, 'c')
+cr = ClassicalRegister(s, 'c')
 qc = QuantumCircuit(qr, cr)
 
 def init(qc, s, M):
+    # Initialize the qubits to uniform superposition
     for i in range(0, s):
         qc.h(qr[i])
     
     for i in range(0, M-1):
+        # Add CNOT gates to copy positional encoding to the next set
         for j in range(0, s):
             qc.cx(qr[i * s + j], qr[i * s + s + j])
+        # Increment the positional encoding
         for j in range(0, s):
-            qc.x(qr[i * s + s - 1 - j])
-            nc = []
-            for k in range(i * s + s - 1, i * s + s - 1 - j - 1, -1):
-                nc.insert(0,k)
-            for k in range(i * s + s + s - 1, i * s + s + s - 1 - j - 1, - 1):
-                nCX(nc, k, s * M)        
-            qc.x(qr[i * s + s - 1 - j])
+            inverted_control_bit = (i + 1) * s - (j + 1)
+            # Flip the control bit
+            qc.x(qr[inverted_control_bit])
+            control_bits = list(range(inverted_control_bit, (i + 1) * s))
+            # Apply multi-controlled CX
+            for k in range((i + 2) * s - 1, s + inverted_control_bit - 1, -1):
+                qc.mcx(control_bits, k)
+            # Uncomputation of Flip the control bit
+            qc.x(qr[inverted_control_bit])
+    return
 
+def oracle_function(f, s, q):
 
-def oracle_function(f, s, q, anc):
+    target_bit = (q + 1) * s - 1
     for i in range(0, len(f)):
-        if f[i]:
+        if f[i] == '1':
+            # hack to get binary representation of 'i' as a string
+            binary_i = format(i, '0'+str(s)+'b')
+            # Convert Binary representation 0, 1 to -1, 1 using Phase gate
             for j in range(0, s):
-                if not f[j]:
-                    qc.x(qr[q + j])
-            qc.h(qr[q + s - 1])
-            nc = []
+                if binary_i[j] == '0':
+                    qc.x(qr[q * s + j])
 
-            for j in range(q, q + s - 1):
-                nc.append(j)
+            control_bits = list(range(q * s, target_bit))
+            # Apply multi controlled CX
+            qc.mcx(control_bits, target_bit)
 
-            nCX(nc, q + s - 1, anc)
-            qc.h(qr[q + s - 1])
-
+            # Uncomputation of Phase gate
             for j in range(0, s):
-                if not f[j]:
-                    qc.x(qr[q + j])
-    
+                if binary_i[j] == '0':
+                    qc.x(qr[q * s + j])
 
+# Grover's amplitude amplification function
 def amplitude_amplification(s, M):
-    for i in range(0, s * M):
+    target_bit = s * M - 1
+    ancilla_bit = s * M
+
+    for i in range(0, ancilla_bit):
         qc.h(qr[i])
         qc.x(qr[i])
 
-    qc.h(qr[s * M - 1])
-    nc = []
-    for j in range(0, s * M - 1):
-        nc.append(j)
-    nCX(nc, s * M - 1, s * M)
-    qc.h(qr[s * M - 1])
+    control_bits = list(range(0, target_bit))
+    qc.mcx(control_bits, target_bit)
 
-    for i in range(0, s * M):
+    for i in range(0, ancilla_bit):
         qc.x(qr[i])
         qc.h(qr[i])
 
-def nCX(c, t, anc):
-    nc = len(c)
-    if nc == 1:
-        qc.cx(qr[c[0]], qr[t])
-    elif nc == 2:
-        qc.toffoli(qr[c[0]],qr[c[1]],qr[t])
-    else:
-        qc.toffoli(qr[c[0]],qr[c[1]],qr[anc])
-        for i in range(2, nc):
-            qc.toffoli(qr[c[i]],qr[anc + i - 2],qr[anc + i - 1])
-
-        qc.cx(qr[anc + nc - 2], qr[t])
-
-        for i in range(nc - 1, 1, -1):
-            qc.toffoli(qr[c[i]], anc + i - 2, anc + i - 1)
-        qc.toffoli(qr[c[0]], qr[c[1]], anc) 
-
-
-
+adenine = ''.join('1' if w[i] == 'a' else '0' for i in range(len(w)))
+cyctosine = ''.join('1' if w[i] == 'c' else '0' for i in range(len(w)))
+guanine = ''.join('1' if w[i] == 'g' else '0' for i in range(len(w)))
+thyamine = ''.join('1' if w[i] == 't' else '0' for i in range(len(w)))
 
 init(qc, s, M)
 
-fa = []
-fc = []
-fg = []
-ft = []
+for _i in range(0, int(sqrt(N + M - 1))):
+    for i in range(0, M):
+        if p[i] == 'a':
+            oracle_function(adenine, s, i)
+        elif p[i] == 'c':
+            oracle_function(cyctosine, s, i)
+        elif p[i] == 'g':
+            oracle_function(guanine, s, i)
+        else:
+            oracle_function(thyamine, s, i)
+        amplitude_amplification(s, M)
 
-for wi in range(0,N):
-    if w[wi] == '0':
-        fa.append(True)
-        fc.append(False)
-        fg.append(False)
-        ft.append(False)
-    elif w[wi] == '1':
-        fa.append(False)
-        fc.append(True)
-        fg.append(False)
-        ft.append(False)
-    elif w[wi] == '2':
-        fa.append(False)
-        fc.append(False)
-        fg.append(True)
-        ft.append(False)
-    else:
-        fa.append(False)
-        fc.append(False)
-        fg.append(False)
-        ft.append(True)
 
-for i in range(0,M):
-    if p[i] == '0':
-        oracle_function(fa, s, i * s, s * M)
-    elif p[i] == '1':
-        oracle_function(fc, s, i * s, s * M)
-    elif p[i] == '2':
-        oracle_function(fg, s, i * s, s * M)
-    else:
-        oracle_function(ft, s, i * s, s * M)
-    
-    amplitude_amplification(s, M)
-
-x = 0
-for i in range(total_qubits - s - 1, total_qubits):
-    qc.measure(qr[i], cr[x])
-    x = x + 1
+for i in range(0, s):
+    qc.measure(qr[i], cr[i])
 
 #Illustrating the quantum circuit
 from qiskit.visualization import plot_histogram
 # qc.draw(output='mpl', filename='pm_8_bit.pdf')
-qc.draw(output='mpl', filename='pm_8_bit.png')
-print(qc.qasm())
+# qc.draw(output='mpl', filename='pm_8_bit.png')
+# print(qc.qasm())
 
 #for running circuit on simulator or QPU
 from qiskit import execute
 
 #To run the quantum program on a local simulator 
 from qiskit import Aer
+
 simulator = Aer.get_backend('qasm_simulator')
 
 #running the circuit on the localsimulator  
-job = execute(qc, simulator, shots=1000)
+job = execute(qc, simulator, shots=shots)
 
 #Fetching results from the job
 result = job.result()
@@ -156,8 +129,9 @@ result = job.result()
 counts = result.get_counts(qc)
 #counts is a dictionary: states|number of times that the state has been observed
 print('Running on local simulator')
-print('State', '\tOccurance') 
-for quantum_state in counts:
-    print(quantum_state, '\t\t', counts[quantum_state])
+print('State', '\t\tOccurance')
 
+sorted_counts = dict(sorted(counts.items(), key=operator.itemgetter(1), reverse=True))
 
+for quantum_state in sorted_counts:
+    print(quantum_state, '\t\t', sorted_counts[quantum_state])
