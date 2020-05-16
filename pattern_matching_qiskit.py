@@ -48,13 +48,6 @@ class QuantumPatternMatcher():
         self.simulator = Aer.get_backend('qasm_simulator')
 
 
-        # Base strings
-        self.adenine = ''.join('1' if self.dna_string[i] == 'a' else '0' for i in range(self.N))
-        self.cyctosine = ''.join('1' if self.dna_string[i] == 'c' else '0' for i in range(self.N))
-        self.guanine = ''.join('1' if self.dna_string[i] == 'g' else '0' for i in range(self.N))
-        self.thyamine = ''.join('1' if self.dna_string[i] == 't' else '0' for i in range(self.N))
-
-
     def initialize_input_set(self):
         s = self.index_qubits
         # Initialize the qubits to uniform superposition
@@ -73,16 +66,16 @@ class QuantumPatternMatcher():
                 control_bits = list(range(inverted_control_bit, (i + 1) * s))
                 # Apply multi-controlled CX
                 for k in range((i + 2) * s - 1, s + inverted_control_bit - 1, -1):
-                    self.qc.mcx(control_bits, k)
+                    self.qc.mcx(control_bits, k,ancilla_qubits=[k + 1])
                 # Uncomputation of Flip the control bit
                 self.qc.x(self.qr[inverted_control_bit])
         return
 
-    def oracle_function(self, base_string, start_index):
+    def oracle_function(self, search_base, start_index):
         s = self.index_qubits
         target_bit = (start_index + 1) * s - 1
-        for i in range(0, len(base_string)):
-            if base_string[i] == '1':
+        for i, base in enumerate(self.dna_string):
+            if base == search_base:
                 # hack to get binary representation of 'i' as a string
                 binary_i = format(i, '0'+str(s)+'b')
                 # Convert Binary representation 0, 1 to -1, 1 using Phase gate
@@ -92,13 +85,14 @@ class QuantumPatternMatcher():
 
                 control_bits = list(range(start_index * s, target_bit))
                 # Apply multi controlled CX
-                self.qc.mcx(control_bits, target_bit)
+                self.qc.mcx(control_bits, target_bit, ancilla_qubits=[target_bit + 1])
 
                 # Uncomputation of Phase gate
                 for j in range(0, start_index):
                     if binary_i[j] == '0':
                         self.qc.x(self.qr[start_index * s + j])
         return
+
 
     # Grover's amplitude amplification function
     def amplitude_amplification(self):
@@ -109,7 +103,7 @@ class QuantumPatternMatcher():
             self.qc.x(self.qr[i])
 
         control_bits = list(range(0, target_bit))
-        self.qc.mcx(control_bits, target_bit)
+        self.qc.mcx(control_bits, target_bit, ancilla_qubits=[self.ancilla_bit_id])
 
         for i in range(0, self.ancilla_bit_id):
             self.qc.x(self.qr[i])
@@ -118,19 +112,15 @@ class QuantumPatternMatcher():
 
     # Driver function
     def execute(self):
+        print("Given String: ", self.dna_string)
+        print("Search: ", self.search_string)
+
         self.initialize_input_set()
 
-        grovers_iterations = int(sqrt(self.N + self.M - 1))
+        grovers_iterations = int(ceil(sqrt(self.N + self.M - 1)))
         for _i in range(0, grovers_iterations):
             for i in range(0, self.M):
-                if self.search_string[i] == 'a':
-                    self.oracle_function(self.adenine, i)
-                elif self.search_string[i] == 'c':
-                    self.oracle_function(self.cyctosine, i)
-                elif self.search_string[i] == 'g':
-                    self.oracle_function(self.guanine, i)
-                else:
-                    self.oracle_function(self.thyamine, i)
+                self.oracle_function(self.search_string[i], i)
                 self.amplitude_amplification()
 
         for i in range(0, self.index_qubits):
@@ -138,7 +128,6 @@ class QuantumPatternMatcher():
 
         # qc.draw(output='mpl', filename='pm_8_bit.png')
         # print(qc.qasm())
-
 
         #running the circuit on the local simulator
         job = execute(self.qc, self.simulator, shots=self.shots)
@@ -157,5 +146,5 @@ class QuantumPatternMatcher():
         return
 
 if __name__ == '__main__':
-    qpm = QuantumPatternMatcher("cgattgac", "ga", 100)
+    qpm = QuantumPatternMatcher("cgatgatc", "ga", 1000)
     qpm.execute()
