@@ -1,2 +1,3 @@
-# quantum_pattern_matching
-Implementation of pattern matching for DNA sequences using gate model quantum computing
+# Quantum Pattern Matching
+
+This is a prototype for pattern matching of DNA sequences using Quantum Computing. Uses [IBM qiskit](https://qiskit.org/) for simulating a quantum circuit based on an extension of Grover's search algorithm.
